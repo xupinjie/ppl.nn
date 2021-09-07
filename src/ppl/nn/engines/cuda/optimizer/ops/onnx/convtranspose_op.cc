@@ -34,9 +34,16 @@ RetCode ConvTransposeOp::Init(const OptKernelOptions& options) {
         return status;
     }
 
-    infer_type_func_ = [this](InputOutputInfo* info, datatype_t type) -> RetCode {
-        if (type == ppl::common::DATATYPE_UNKNOWN) {
-            type = ppl::common::DATATYPE_FLOAT16;
+    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+        type = ppl::common::DATATYPE_FLOAT16;
+        if (type == DATATYPE_UNKNOWN) {
+            return InferInheritedType(info);
+        } else if (type == DATATYPE_INT8) {
+            auto status = CopyQuantType(info, quant);
+            if (status != RC_SUCCESS) {
+                LOG(ERROR) << "Set quantization for node[" << this->GetNode()->GetName() << "] failed.";
+                return status;
+            }
         }
         return InferDefaultType(info, type);
     };

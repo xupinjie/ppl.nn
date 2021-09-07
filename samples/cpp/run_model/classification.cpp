@@ -25,8 +25,7 @@
 
 #include "ppl/nn/models/onnx/onnx_runtime_builder_factory.h"
 #include "ppl/nn/engines/x86/engine_factory.h"
-#include "ppl/nn/engines/x86/x86_options.h"
-#include "ppl/kernel/x86/common/threading_tools.h"
+#include "ppl/nn/engines/x86/x86_engine_options.h"
 
 #include "imagenet_labels.h"
 
@@ -57,7 +56,7 @@ int32_t ImagePreprocess(const Mat& src_img, float* in_data) {
     split(rgb_img, rgb_channels);
 
     // by this constructor, when cv::Mat r_channel_fp32 changed, in_data will also change
-    Mat r_channel_fp32(height, width, CV_32FC1, in_data + 0 * height * width); 
+    Mat r_channel_fp32(height, width, CV_32FC1, in_data + 0 * height * width);
     Mat g_channel_fp32(height, width, CV_32FC1, in_data + 1 * height * width);
     Mat b_channel_fp32(height, width, CV_32FC1, in_data + 2 * height * width);
     vector<Mat> rgb_channels_fp32{r_channel_fp32, g_channel_fp32, b_channel_fp32};
@@ -114,7 +113,7 @@ int RunClassificationModel(const Mat& src_img, const char* onnx_model_path) {
     printf("image preprocess succeed!\n");
 
     /************************ 2. create runtime builder from onnx model *************************/
-    auto x86_engine = X86EngineFactory::Create(); // create x86 engine
+    auto x86_engine = X86EngineFactory::Create(X86EngineOptions()); // create x86 engine with default options
 
     // register all engines you want to use
     vector<unique_ptr<Engine>> engines;
@@ -123,24 +122,20 @@ int RunClassificationModel(const Mat& src_img, const char* onnx_model_path) {
     engine_ptrs.emplace_back(engines[0].get());
 
     // create onnx runtime builder according to onnx model & engines registered before
-    auto builder = unique_ptr<OnnxRuntimeBuilder>(
+    auto builder = unique_ptr<RuntimeBuilder>(
         OnnxRuntimeBuilderFactory::Create(onnx_model_path, engine_ptrs.data(), engine_ptrs.size()));
     if (!builder) {
-        fprintf(stderr, "create OnnxRuntimeBuilder from onnx model %s failed!\n", onnx_model_path);
+        fprintf(stderr, "create RuntimeBuilder from onnx model %s failed!\n", onnx_model_path);
         return -1;
     }
 
     printf("successfully create runtime builder!\n");
 
     /************************ 3. build runtime *************************/
-    // configure runtime options
-    RuntimeOptions runtime_options;
-    runtime_options.mm_policy = MM_LESS_MEMORY; // configure to less memory usage
-
     // use runtime builder to build runtime, one builder can be used to build multiple runtimes sharing constant data & topo
     // here we only build one runtime for easy to understand
     unique_ptr<Runtime> runtime;
-    runtime.reset(builder->CreateRuntime(runtime_options));
+    runtime.reset(builder->CreateRuntime());
     if (!runtime) {
         fprintf(stderr, "build runtime failed!\n");
         return -1;

@@ -27,13 +27,17 @@ using namespace ppl::nn::common;
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode ChannelShuffleOp::Init(const OptKernelOptions& options) {
-    infer_type_func_ = [this](InputOutputInfo* info, datatype_t type) -> RetCode {
-        auto in_shape = &info->GetInput<TensorImpl>(0)->GetShape();
-        for (uint32_t i = 0; i < info->GetOutputCount(); ++i) {
-            auto out_shape = &info->GetOutput<TensorImpl>(i)->GetShape();
-            out_shape->SetDataType(in_shape->GetDataType());
+    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+        if (type == DATATYPE_UNKNOWN) {
+            return InferInheritedType(info);
+        } else if (type == DATATYPE_INT8) {
+            auto status = CopyQuantType(info, quant);
+            if (status != RC_SUCCESS) {
+                LOG(ERROR) << "Set quantization for node[" << this->GetNode()->GetName() << "] failed.";
+                return status;
+            }
         }
-        return ppl::common::RC_SUCCESS;
+        return InferDefaultType(info, type);
     };
 
     infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {

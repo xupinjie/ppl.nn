@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 project(PPLKernelX86)
 
 option(PPL_USE_X86_OMP "Build x86 kernel with openmp support." OFF)
@@ -95,8 +95,9 @@ target_include_directories(PPLKernelX86
 target_compile_definitions(PPLKernelX86 PRIVATE ${PPLKERNELX86_COMPILE_DEFINITIONS})
 target_compile_options(PPLKernelX86 PRIVATE ${PPLKERNELX86_COMPILE_OPTIONS})
 
-install(TARGETS PPLKernelX86 ARCHIVE DESTINATION lib)
-#install(DIRECTORY include/ppl DESTINATION include)
+if(PPLNN_INSTALL)
+    install(TARGETS PPLKernelX86 ARCHIVE DESTINATION lib)
+endif()
 
 ################### Test ###################
 
@@ -124,3 +125,11 @@ target_include_directories(test_gemm
 target_compile_options(test_gemm PRIVATE ${PPLKERNELX86_COMPILE_OPTIONS})
 target_compile_definitions(test_gemm PRIVATE ${PPLKERNELX86_COMPILE_DEFINITIONS})
 target_link_libraries(test_gemm PRIVATE PPLKernelX86 ${PPLKERNELX86_LINK_LIBRARIES})
+
+add_executable(test_gemm_v2 test/test_gemm_v2.cpp ${PPLNN_TOOLS_DIR}/simple_flags.cc)
+target_include_directories(test_gemm_v2
+    PUBLIC include ${PPLKERNELX86_INCLUDE_DIRECTORIES}
+    PRIVATE src ${PPLNN_TOOLS_DIR} ${PPLNN_FRAMEWORK_INCLUDE_DIRECTORIES})
+target_compile_options(test_gemm_v2 PRIVATE ${PPLKERNELX86_COMPILE_OPTIONS})
+target_compile_definitions(test_gemm_v2 PRIVATE ${PPLKERNELX86_COMPILE_DEFINITIONS})
+target_link_libraries(test_gemm_v2 PRIVATE PPLKernelX86 ${PPLKERNELX86_LINK_LIBRARIES})

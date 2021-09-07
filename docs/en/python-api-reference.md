@@ -1,6 +1,6 @@
 This section describes the python APIs of `PPLNN`. Refer to [pplnn.py](../../tools/pplnn.py) for usage examples and [py_pplnn.cc](../../python/py_pplnn.cc) for exported symbols.
 
-## Common APIs in `pypplnn`
+## Common APIs in `pyppl.nn`
 
 ### TensorShape
 
@@ -11,16 +11,22 @@ dims = TensorShape::GetDims()
 Returns a tuple of array dimensions.
 
 ```python
+TensorShape::SetDims(dims)
+```
+
+Sets dims of the tensor.
+
+```python
 data_type = TensorShape::GetDataType()
 ```
 
-Returns the data type of elements in tensor. Data types are defined in `pypplcommon`.
+Returns the data type of elements in tensor. Data types are defined in `pyppl.common`.
 
 ```python
 data_format = TensorShape::GetDataFormat()
 ```
 
-Returns the data format of tensor. Data formats are defined in `pypplcommon`.
+Returns the data format of tensor. Data formats are defined in `pyppl.common`.
 
 ```python
 is_scalar = TensorShape::IsScalar()
@@ -43,16 +49,28 @@ tensor_shape = Tensor::GetShape()
 Returns a `TensorShape` info of the tensor.
 
 ```python
-ret_code = Tensor::CopyFromHost(numpy_ndarray)
+ret_code = Tensor::ConvertFromHost(numpy_ndarray)
 ```
 
-Copies data to the tensor from an `ndarray` object. `ret_code` is an instance of `RetCode` defined in `pypplcommon`.
+Copies NDARRAY data to the tensor from an `ndarray` object. `ret_code` is an instance of `RetCode` defined in `pyppl.common`.
 
 ```python
-tensor_data = Tensor::CopyToHost()
+tensor_data = Tensor::ConvertToHost()
 ```
 
-Copies tensor's data to host. We can use `numpy.array` to create an `ndarray` instance using `numpy_ndarray = numpy.array(tensor_data, copy=False)`.
+Copies tensor's data to host in NDARRAY format. We can use `numpy.array` to create an `ndarray` instance using `numpy_ndarray = numpy.array(tensor_data, copy=False)`.
+
+```python
+addr = Tensor::GetBufferPtr()
+```
+
+Returns the underlying buffer ptr as an integer.
+
+```python
+Tensor::SetBfferPtr(addr)
+```
+
+Sets the tensor buffer area to `addr` which is an integer and can be casted to `void*`. Note that `addr` can be read/written by internal `Device` class.
 
 ### Engine
 
@@ -62,23 +80,18 @@ name_str = Engine::GetName()
 
 Returns engine's name.
 
-### RuntimeOptions
-
-Refer to [runtime_options.h](../../include/ppl/nn/runtime/runtime_options.h) for more details.
-
 ### OnnxRuntimeBuilderFactory
 
 ```python
 runtime_builder = OnnxRuntimeBuilderFactory::CreateFromFile(onnx_model_file, engines)
 ```
 
-Creates an `OnnxRuntimeBuilder` instance from an ONNX model. `engines` is a list of `Engine` instances that may be used to evaluate the model.
+Creates an `RuntimeBuilder` instance from an ONNX model. `engines` is a list of `Engine` instances that may be used to evaluate the model.
 
-### OnnxRuntimeBuilder
+### RuntimeBuilder
 
 ```python
-runtime_options = RuntimeOptions()
-runtime = OnnxRuntimeBuilder::CreateRuntime(runtime_options)
+runtime = RuntimeBuilder::CreateRuntime()
 ```
 
 Creates a `Runtime` instance for inferencing.
@@ -101,7 +114,7 @@ Returns the input tensor in position `idx`, which is in range [0, input_count).
 ret_code = Runtime::Run()
 ```
 
-Evaluates the model. `ret_code` is an instance of `RetCode` defined in `pypplcommon`.
+Evaluates the model. `ret_code` is an instance of `RetCode` defined in `pyppl.common`.
 
 ```python
 ret_code = Runtime::Sync()
@@ -121,17 +134,24 @@ output_tensor = Runtime::GetOutputTensor(idx)
 
 Returns the output tensor in position `idx`, which is in range [0, output_count).
 
-## Device Specific APIs in `pypplnn`
+## Device Specific APIs in `pyppl.nn`
 
 ### X86
 
 #### X86EngineFactory
 
 ```python
-x86_engine = X86EngineFactory::Create()
+x86_options = X86EngineOptions()
+x86_engine = X86EngineFactory::Create(x86_options)
 ```
 
 Creates an `Engine` instance running on x86-64 compatiable CPUs.
+
+```python
+ret_code = x86_engine.Configure(option)
+```
+
+Configures `x86_engine`. Refer to [x86_options.h](../../include/ppl/nn/engines/x86/x86_options.h) for available options.
 
 ### CUDA
 
@@ -148,6 +168,12 @@ cuda_engine = CudaEngineFactory::Create(cuda_options)
 
 Creates an `Engine` instance running on NVIDIA GPUs.
 
+```python
+ret_code = cuda_engine.Configure(option)
+```
+
+Configures `cuda_engine`. Refer to [cuda_options.h](../../include/ppl/nn/engines/cuda/cuda_options.h) for available options(some options are not exported yet).
+
 ## Other Utilities
 
 ```python
@@ -157,14 +183,14 @@ version_str = pypplnn.GetVersionString()
 Returns the version string of current version.
 
 ```python
-msg_str = pypplcommon.GetRetCodeStr(ret_code)
+msg_str = pyppl.common.GetRetCodeStr(ret_code)
 ```
 
 Returns a human-readable message of `ret_code`.
 
 ```python
-pypplcommon.SetLoggingLevel(log_level)
-log_level = pypplcommon.GetLoggingLevel()
+pyppl.common.SetLoggingLevel(log_level)
+log_level = pyppl.common.GetLoggingLevel()
 ```
 
-Sets and gets the current logging level respectively. Logging levels are defined in `pypplcommon`.
+Sets and gets the current logging level respectively. Logging levels are defined in `pyppl.common`.

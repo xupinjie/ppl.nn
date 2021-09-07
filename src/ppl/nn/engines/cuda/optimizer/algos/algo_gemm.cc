@@ -34,7 +34,7 @@ void GemmAlgorithm::DeleteAttrParam(void*& param) {
     return;
 }
 
-void GemmAlgorithm::GetAttrParam(void*& param) {
+void GemmAlgorithm::GetAttrParam(void*& param) const {
     if (param == nullptr) {
         param = new CudaGemmParam();
     }
@@ -42,7 +42,7 @@ void GemmAlgorithm::GetAttrParam(void*& param) {
     return;
 }
 
-const double GemmAlgorithm::ExcuteTimer(ir::Node* node, OptKernelOptions& options) {
+double GemmAlgorithm::ExcuteTimer(const ir::Node* node, OptKernelOptions& options) {
     this->attr_param_ = *(reinterpret_cast<CudaGemmParam*>(options.param));
     attr_param_.extra_param.kernel_index = 0;
     if (node->GetInputCount() == 3) {
@@ -171,6 +171,8 @@ RetCode GemmAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions& optio
         reinterpret_cast<CudaGemmParam*>(options.param)->param.transB = 1;
         options.info->constants.emplace(preedge_id, std::move(weight_constat_info));
         options.tensors->find(preedge_id)->second->GetShape() = postshape;
+        options.quants->at(preedge_id).format = postshape.GetDataFormat();
+        options.quants->at(preedge_id).type = postshape.GetDataType();
     }
     if (attr_param_.param.bias_term == 0) {
         return RC_SUCCESS;
@@ -215,6 +217,8 @@ RetCode GemmAlgorithm::ModifyParam(const ir::Node* node, OptKernelOptions& optio
 
         options.info->constants.emplace(preedge_id, std::move(bias_constat_info));
         options.tensors->find(preedge_id)->second->GetShape() = postshape;
+        options.quants->at(preedge_id).format = postshape.GetDataFormat();
+        options.quants->at(preedge_id).type = postshape.GetDataType();
     }
 
     return RC_SUCCESS;

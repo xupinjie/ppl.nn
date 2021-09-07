@@ -17,12 +17,28 @@
 
 #include "py_tensor.h"
 #include "ppl/nn/common/logger.h"
+#include <map>
 using namespace std;
 using namespace ppl::common;
 
 namespace ppl { namespace nn { namespace python {
 
-RetCode PyTensor::CopyFromHost(const pybind11::buffer& b) {
+static const map<string, datatype_t> g_format2datatype = {
+    {"B", DATATYPE_UINT8}, // -> unsigned char
+    {"H", DATATYPE_UINT16}, //  -> unsigned short
+    {"I", DATATYPE_UINT32}, //  -> unsigned int
+    {"L", DATATYPE_UINT64}, //  -> unsigned long
+    {"e", DATATYPE_FLOAT16}, //  -> 2 bytes
+    {"f", DATATYPE_FLOAT32}, //  -> float
+    {"d", DATATYPE_FLOAT64}, //  -> double
+    {"b", DATATYPE_INT8}, //  -> signed char
+    {"h", DATATYPE_INT16}, //  -> short
+    {"i", DATATYPE_INT32}, //  -> int
+    {"l", DATATYPE_INT64}, //  -> long
+    {"?", DATATYPE_BOOL}, //  -> unsigned char
+};
+
+RetCode PyTensor::ConvertFromHost(const pybind11::buffer& b) {
     pybind11::buffer_info info = b.request();
 
     vector<int64_t> dims(info.ndim);
@@ -33,8 +49,18 @@ RetCode PyTensor::CopyFromHost(const pybind11::buffer& b) {
     TensorShape& shape = tensor_->GetShape();
     shape.Reshape(dims);
 
+    auto ref = g_format2datatype.find(info.format);
+    if (ref == g_format2datatype.end()) {
+        LOG(ERROR) << "unsupported data format[\"" << info.format << "\"]";
+        return RC_UNSUPPORTED;
+    }
+    auto data_type = ref->second;
+    LOG(DEBUG) << "data type of input for tensor[" << tensor_->GetName() << "] is [" << GetDataTypeStr(data_type)
+               << "].";
+
     TensorShape src_shape = shape;
     src_shape.SetDataFormat(DATAFORMAT_NDARRAY);
+    src_shape.SetDataType(data_type);
 
     auto status = tensor_->ReallocBuffer();
     if (status != RC_SUCCESS) {
@@ -53,7 +79,7 @@ RetCode PyTensor::CopyFromHost(const pybind11::buffer& b) {
     return RC_SUCCESS;
 }
 
-PyNdArray PyTensor::CopyToHost() const {
+PyNdArray PyTensor::ConvertToHost() const {
     PyNdArray arr;
     if (tensor_->GetShape().GetBytesExcludingPadding() == 0) {
         return arr;
@@ -89,10 +115,22 @@ PyNdArray PyTensor::CopyToHost() const {
 
 void RegisterTensor(pybind11::module* m) {
     pybind11::class_<PyTensor>(*m, "Tensor")
+        .def("__bool__",
+             [](const PyTensor& tensor) -> bool {
+                 return (tensor.GetPtr());
+             })
+        .def("GetBufferPtr",
+             [](const PyTensor& tensor) -> uint64_t {
+                 return (uint64_t)(tensor.GetPtr()->GetBufferPtr());
+             })
+        .def("SetBufferPtr",
+             [](PyTensor& tensor, uint64_t ptr) -> void {
+                 tensor.GetPtr()->SetBufferPtr((void*)ptr);
+             })
         .def("GetName", &PyTensor::GetName, pybind11::return_value_policy::reference)
         .def("GetShape", &PyTensor::GetConstShape, pybind11::return_value_policy::reference)
-        .def("CopyFromHost", &PyTensor::CopyFromHost)
-        .def("CopyToHost", &PyTensor::CopyToHost, pybind11::return_value_policy::move);
+        .def("ConvertFromHost", &PyTensor::ConvertFromHost)
+        .def("ConvertToHost", &PyTensor::ConvertToHost, pybind11::return_value_policy::move);
 }
 
 }}} // namespace ppl::nn::python

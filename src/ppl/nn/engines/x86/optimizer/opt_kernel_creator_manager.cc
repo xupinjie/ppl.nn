@@ -46,6 +46,7 @@
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/less_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/log_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/loop_op.h"
+#include "ppl/nn/engines/x86/optimizer/ops/onnx/lstm_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/matmul_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/max_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/max_pool_op.h"
@@ -87,11 +88,13 @@
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/unsqueeze_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/onnx/where_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/mmcv/mmcv_gridsample_op.h"
+#include "ppl/nn/engines/x86/optimizer/ops/mmcv/mmcv_modulated_deform_conv2d_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/mmcv/mmcv_non_max_suppression_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/mmcv/mmcv_roialign_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/ppl/reorder_op.h"
 #include "ppl/nn/engines/x86/optimizer/ops/ppl/channel_shuffle_op.h"
-#include "ppl/nn/engines/x86/optimizer/ops/ppl/shape_op.h"
+#include "ppl/nn/engines/x86/optimizer/ops/ppl/shape_operation_op.h"
+#include "ppl/nn/engines/x86/optimizer/ops/ppl/swish_op.h"
 #include "ppl/nn/common/logger.h"
 using namespace std;
 using namespace ppl::common;
@@ -102,6 +105,17 @@ RetCode OptKernelCreatorManager::Register(const string& domain, const string& ty
     auto domain_ret = domain_type_creator_.insert(make_pair(domain, map<string, OptKernelCreator>()));
     auto type_ret = domain_ret.first->second.insert(make_pair(type, creator));
     return type_ret.second ? RC_SUCCESS : RC_EXISTS;
+}
+
+void OptKernelCreatorManager::Remove(const string& domain, const string& type) {
+    auto domain_ret = domain_type_creator_.find(domain);
+    if (domain_ret != domain_type_creator_.end()) {
+        auto& type2creator = domain_ret->second;
+        type2creator.erase(type);
+        if (type2creator.empty()) {
+            domain_type_creator_.erase(domain_ret);
+        }
+    }
 }
 
 OptKernelCreator OptKernelCreatorManager::Find(const string& domain, const string& type) {
@@ -156,6 +170,7 @@ OptKernelCreatorManager::OptKernelCreatorManager() {
     REGISTER_OPT_KERNEL_CREATOR("", "Less", LessOp);
     REGISTER_OPT_KERNEL_CREATOR("", "Log", LogOp);
     REGISTER_OPT_KERNEL_CREATOR("", "Loop", LoopOp);
+    REGISTER_OPT_KERNEL_CREATOR("", "LSTM", LSTMOp);
     REGISTER_OPT_KERNEL_CREATOR("", "MatMul", MatMulOp);
     REGISTER_OPT_KERNEL_CREATOR("", "Max", MaxOp);
     REGISTER_OPT_KERNEL_CREATOR("", "MaxPool", MaxPoolOp);
@@ -201,11 +216,13 @@ OptKernelCreatorManager::OptKernelCreatorManager() {
     REGISTER_OPT_KERNEL_CREATOR("mmcv", "grid_sampler", MMCVGridSampleOp);
     REGISTER_OPT_KERNEL_CREATOR("mmcv", "NonMaxSuppression", MMCVNonMaxSuppressionOp);
     REGISTER_OPT_KERNEL_CREATOR("mmcv", "MMCVRoiAlign", MMCVROIAlignOp);
+    REGISTER_OPT_KERNEL_CREATOR("mmcv", "MMCVModulatedDeformConv2d", MMCVModulatedDeformConv2dOp);
 
     // ppl
     REGISTER_OPT_KERNEL_CREATOR("ppl", "ChannelShuffle", ChannelShuffleOp);
     REGISTER_OPT_KERNEL_CREATOR("ppl", "Reorder", ReorderOp);
-    REGISTER_OPT_KERNEL_CREATOR("ppl", "Shape", PPLShapeOp);
+    REGISTER_OPT_KERNEL_CREATOR("ppl", "Shape", PPLShapeOperationOp);
+    REGISTER_OPT_KERNEL_CREATOR("ppl", "Swish", SwishOp);
 }
 
 }}} // namespace ppl::nn::x86

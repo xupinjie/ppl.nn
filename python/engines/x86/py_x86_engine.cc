@@ -26,8 +26,8 @@ using namespace ppl::common;
 namespace ppl { namespace nn { namespace python {
 
 RetCode PyX86Engine::Configure(uint32_t option, const pybind11::args& args) {
-    if (option == x86::X86_CONF_DISABLE_AVX512) {
-        return engine_->Configure(x86::X86_CONF_DISABLE_AVX512);
+    if (option == X86_CONF_DISABLE_AVX512) {
+        return engine_->Configure(X86_CONF_DISABLE_AVX512);
     }
 
     LOG(ERROR) << "unsupported option: " << option;
@@ -36,11 +36,14 @@ RetCode PyX86Engine::Configure(uint32_t option, const pybind11::args& args) {
 
 void RegisterX86Engine(pybind11::module* m) {
     pybind11::class_<PyX86Engine>(*m, "X86Engine")
+        .def("__bool__",
+             [](const PyX86Engine& engine) -> bool {
+                 return (engine.GetInnerPtr().get());
+             })
         .def("GetName", &PyX86Engine::GetName)
         .def("Configure", &PyX86Engine::Configure);
 
-    m->attr("X86_CONF_DISABLE_AVX512") = (uint32_t)x86::X86_CONF_DISABLE_AVX512;
-    m->attr("X86_CONF_MAX") = (uint32_t)x86::X86_CONF_MAX;
+    m->attr("X86_CONF_DISABLE_AVX512") = (uint32_t)X86_CONF_DISABLE_AVX512;
 }
 
 }}} // namespace ppl::nn::python

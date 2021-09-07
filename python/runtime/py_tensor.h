@@ -29,14 +29,17 @@ public:
     PyTensor(Tensor* tensor) : tensor_(tensor) {}
     PyTensor(PyTensor&&) = default;
     PyTensor& operator=(PyTensor&&) = default;
+    Tensor* GetPtr() const {
+        return tensor_;
+    }
     const char* GetName() const {
         return tensor_->GetName();
     }
     const TensorShape& GetConstShape() const {
         return tensor_->GetShape();
     }
-    ppl::common::RetCode CopyFromHost(const pybind11::buffer&);
-    PyNdArray CopyToHost() const;
+    ppl::common::RetCode ConvertFromHost(const pybind11::buffer&);
+    PyNdArray ConvertToHost() const;
 
 private:
     Tensor* tensor_;

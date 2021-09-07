@@ -22,7 +22,7 @@
 #include "ppl/nn/engines/cuda/optimizer/opt_kernel_creator_manager.h"
 #include "ppl/nn/params/onnx/transpose_param.h"
 #include "ppl/nn/params/ppl/channel_shuffle_param.h"
-#include "ppl/nn/params/ppl/shape_param.h"
+#include "ppl/nn/params/ppl/shape_operation_param.h"
 
 using namespace ppl::common;
 
@@ -57,9 +57,9 @@ const bool ChannelShuffleFusion::CanFuseFirstReshape(ir::Node* node, const OptKe
 
     auto attr_pair = data->attrs.find(shape_node_id);
     if (attr_pair != data->attrs.end()) {
-        auto param = (const ppl::nn::common::PPLShapeParam*)(attr_pair->second.get());
+        auto param = (const ppl::nn::common::PPLShapeOperationParam*)(attr_pair->second.get());
         auto matrix = param->alpha.find(shape_edge_id)->second;
-        if (matrix.matrix_2d[1][matrix.MAXDIMSIZE] != 2.0f) {
+        if (matrix.numerator[1][matrix.MAXDIMSIZE] / matrix.denominator[1][matrix.MAXDIMSIZE] != 2) {
             return false;
         }
         return true;
@@ -104,9 +104,9 @@ const bool ChannelShuffleFusion::CanFuseSecondReshape(ir::Node* node, const OptK
     auto shape_node_id = topo->GetEdgeById(shape_edge_id)->GetProducer();
     auto attr_pair = data->attrs.find(shape_node_id);
     if (attr_pair != data->attrs.end()) {
-        auto param = (const ppl::nn::common::PPLShapeParam*)(attr_pair->second.get());
+        auto param = (const ppl::nn::common::PPLShapeOperationParam*)(attr_pair->second.get());
         auto matrix = param->alpha.find(shape_edge_id)->second;
-        if (matrix.matrix_2d[1][matrix.MAXDIMSIZE] != -1.0f) {
+        if (matrix.numerator[1][matrix.MAXDIMSIZE] / matrix.denominator[1][matrix.MAXDIMSIZE] != -1) {
             return false;
         }
         return true;
@@ -141,7 +141,7 @@ const bool ChannelShuffleFusion::CanFuse(ir::Node* node, const OptKernelOptions&
         if (topo->GetOutput(edge->GetName()) != INVALID_EDGEID) { // Can not fuse an output edge
             return false;
         }
-        if (topo->GetEdgeById(edge_id)->CalcConsumerCount() != 1) { // Can not fuse multi-consumer edge
+        if (i < 2 && topo->GetEdgeById(edge_id)->CalcConsumerCount() != 1) { // Can not fuse multi-consumer edge
             return false;
         }
         auto nextnode_id = topo->GetEdgeById(edge_id)->CreateConsumerIter().Get(); // Get Output(0)

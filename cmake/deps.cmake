@@ -43,12 +43,12 @@ endif()
 
 FetchContent_Declare(hpcc
     GIT_REPOSITORY https://github.com/openppl-public/hpcc.git
-    GIT_TAG v0.1.1
+    GIT_TAG v0.1.3
     GIT_SHALLOW TRUE
     SOURCE_DIR ${HPCC_DEPS_DIR}/hpcc
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/hpcc-build
     SUBBUILD_DIR ${HPCC_DEPS_DIR}/hpcc-subbuild
-    UPDATE_COMMAND "")
+    UPDATE_DISCONNECTED True)
 
 FetchContent_GetProperties(hpcc)
 if(NOT hpcc_POPULATED)
@@ -63,7 +63,7 @@ set(PPLCOMMON_BUILD_BENCHMARK OFF CACHE BOOL "disable ppl.common benchmark")
 
 hpcc_declare_git_dep(ppl.common
     https://github.com/openppl-public/ppl.common.git
-    v0.2.0)
+    v0.2.4)
 
 # --------------------------------------------------------------------------- #
 
@@ -85,11 +85,19 @@ hpcc_declare_git_dep(rapidjson
 
 # --------------------------------------------------------------------------- #
 
+set(PYBIND11_INSTALL OFF CACHE BOOL "disable pybind11 installation")
+set(PYBIND11_TEST OFF CACHE BOOL "disable pybind11 tests")
+set(PYBIND11_NOPYTHON ON CACHE BOOL "do not find python")
+set(PYBIND11_FINDPYTHON OFF CACHE BOOL "do not find python")
+
 hpcc_declare_git_dep(pybind11
     https://github.com/pybind/pybind11.git
     v2.7.0)
 
 # --------------------------------------------------------------------------- #
+
+set(INSTALL_GTEST OFF CACHE BOOL "")
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
 
 hpcc_declare_git_dep(googletest
     https://github.com/google/googletest.git

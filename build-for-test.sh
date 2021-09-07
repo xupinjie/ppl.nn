@@ -1,11 +1,11 @@
 #!/bin/bash
 
 workdir=`pwd`
-x64_build_dir="${workdir}/x64-build"
+x86_64_build_dir="${workdir}/x86-64-build"
 cuda_build_dir="${workdir}/cuda-build"
 processor_num=`cat /proc/cpuinfo | grep processor | grep -v grep | wc -l`
 
-options='-DCMAKE_BUILD_TYPE=Release'
+options='-DCMAKE_BUILD_TYPE=Release -DPPLNN_ENABLE_PYTHON_API=ON'
 
 # --------------------------------------------------------------------------- #
 
@@ -17,17 +17,17 @@ function BuildCuda() {
     eval "$cmd"
 }
 
-function BuildX64() {
-    mkdir ${x64_build_dir}
-    cd ${x64_build_dir}
-    cmd="cmake $options -DCMAKE_INSTALL_PREFIX=${x64_build_dir}/install .. && make -j${processor_num} && make install"
+function BuildX86_64() {
+    mkdir ${x86_64_build_dir}
+    cd ${x86_64_build_dir}
+    cmd="cmake $options -DHPCC_USE_X86_64=ON -DCMAKE_INSTALL_PREFIX=${x86_64_build_dir}/install .. && make -j${processor_num} && make install"
     echo "cmd -> $cmd"
     eval "$cmd"
 }
 
 declare -A engine2func=(
     ["cuda"]=BuildCuda
-    ["x64"]=BuildX64
+    ["x86_64"]=BuildX86_64
 )
 
 # --------------------------------------------------------------------------- #

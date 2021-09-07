@@ -25,8 +25,17 @@ using namespace ppl::common;
 namespace ppl { namespace nn { namespace cuda {
 
 RetCode TanhOp::Init(const OptKernelOptions& options) {
-    infer_type_func_ = [this](InputOutputInfo* info, datatype_t type) -> RetCode {
-        return type != DATATYPE_UNKNOWN ? InferDefaultType(info, type) : InferInheritedType(info);
+    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+        if (type == DATATYPE_UNKNOWN) {
+            return InferInheritedType(info);
+        } else if (type == DATATYPE_INT8) {
+            auto status = CopyQuantType(info, quant);
+            if (status != RC_SUCCESS) {
+                LOG(ERROR) << "Set quantization for node[" << this->GetNode()->GetName() << "] failed.";
+                return status;
+            }
+        }
+        return InferDefaultType(info, type);
     };
 
     infer_dims_func_ = GenericInferDims;

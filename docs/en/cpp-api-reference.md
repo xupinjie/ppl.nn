@@ -16,19 +16,19 @@ Sets various options for this engine. Parameters vary depending on the first par
 
 ## X86EngineFactory
 
-A built-in engine factory thas is used to create engines running on x86-compatible CPUs.
+A built-in engine factory that is used to create engines running on x86-compatible CPUs.
 
 #### Functions
 
 ```c++
-Engine* X86EngineFactory::Create();
+Engine* X86EngineFactory::Create(const X86EngineOptions& options);
 ```
 
-Creates a x86 engine instance.
+Creates an X86 engine instance with the given options.
 
 ## CudaEngineFactory
 
-A built-in engine factory thas is used to create engines running on NVIDIA GPUs.
+A built-in engine factory that is used to create engines running on NVIDIA GPUs.
 
 #### Functions
 
@@ -36,43 +36,41 @@ A built-in engine factory thas is used to create engines running on NVIDIA GPUs.
 Engine* CudaEngineFactory::Create(const CudaEngineOptions& options);
 ```
 
-Creates a CUDA engine instance with the given `options`.
+Creates a CUDA engine instance with the given options.
 
 ## OnnxRuntimeBuilderFactory
 
 Defined in [include/ppl/nn/models/onnx/onnx_runtime_builder_factory.h](../../include/ppl/nn/models/onnx/onnx_runtime_builder_factory.h).
 
-Used to create an `OnnxRuntimeBuilder`.
+Used to create an `RuntimeBuilder`.
 
 #### Functions
 
 ```c++
-OnnxRuntimeBuilder* Create(const char* model_file,
-                           std::vector<std::unique_ptr<Engine>>&&);
+RuntimeBuilder* Create(const char* model_file, Engine** engines, uint32_t engine_num);
 ```
 
-Creates an `OnnxRuntimeBuilder` instance from an ONNX model file. The first parameter is the model file path, the second is engines that may be used to evaluate the compute graph.
+Creates an `RuntimeBuilder` instance from an ONNX model file. The first parameter is the model file path, the second is engines that may be used to evaluate the compute graph. Note that callers should guarantee that `engines` is valid during inferencing.
 
 ```c++
-OnnxRuntimeBuilder* Create(const char* model_buf, uint64_t buf_len,
-                           std::vector<std::unique_ptr<Engine>>&&);
+RuntimeBuilder* Create(const char* model_buf, uint64_t buf_len, Engine** engines, uint32_t engine_num);
 ```
 
-Creates an `OnnxRuntimeBuilder` instance from an ONNX buffer.
+Creates an `RuntimeBuilder` instance from an ONNX buffer. Note that callers should guarantee that `engines` is valid during inferencing.
 
-## OnnxRuntimeBuilder
+## RuntimeBuilder
 
-Defined in [include/ppl/nn/models/onnx/onnx_runtime_builder.h](../../include/ppl/nn/models/onnx/onnx_runtime_builder.h).
+Defined in [include/ppl/nn/runtime/runtime_builder.h](../../include/ppl/nn/runtime/runtime_builder.h).
 
-`OnnxRuntimeBuilder` is used to create `Runtime` instances. It contains read-only data that a `Runtime` needs.
+`RuntimeBuilder` is used to create `Runtime` instances. It contains read-only data that a `Runtime` needs.
 
 #### Functions
 
 ```c++
-Runtime* CreateRuntime(const RuntimeOptions&);
+Runtime* CreateRuntime();
 ```
 
-Creates a `Runtime` instance which is used to evaluate a compute graph. The parameter `RuntimeOptions` is defined in [include/ppl/nn/runtime/runtime_options.h](../../include/ppl/nn/runtime/runtime_options.h).
+Creates a `Runtime` instance which is used to evaluate a compute graph.
 
 ## Runtime
 
@@ -176,6 +174,18 @@ ppl::common::RetCode ConvertFromHost(const void* src, const ppl::common::TensorS
 ```
 
 Converts data to inner buffer from `src` with the shape `src_desc`. Note that inner buffer MUST be allocated before calling this function.
+
+```c++
+void SetBufferPtr(void* buf);
+```
+
+Sets the underlying buffer ptr. Note that `buf` can be read/written by the internal `Device` class.
+
+```c++
+void* GetBufferPtr() const;
+```
+
+Returns the underlying buffer ptr.
 
 ## TensorShape
 

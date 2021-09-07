@@ -19,7 +19,7 @@
 
 #include "ppl/nn/engines/cuda/optimizer/ops/ppl/bridge_op.h"
 #include "ppl/nn/engines/cuda/optimizer/ops/ppl/channel_shuffle_op.h"
-#include "ppl/nn/engines/cuda/optimizer/ops/ppl/shape_op.h"
+#include "ppl/nn/engines/cuda/optimizer/ops/ppl/shape_operation_op.h"
 #include "ppl/nn/engines/cuda/optimizer/ops/onnx/conv_op.h"
 #include "ppl/nn/engines/cuda/optimizer/ops/onnx/add_op.h"
 #include "ppl/nn/engines/cuda/optimizer/ops/onnx/argmax_op.h"
@@ -101,6 +101,17 @@ RetCode OptKernelCreatorManager::Register(const string& domain, const string& ty
     auto domain_ret = domain_type_creator_.insert(make_pair(domain, map<string, OptKernelCreator>()));
     auto type_ret = domain_ret.first->second.insert(make_pair(type, creator));
     return type_ret.second ? RC_SUCCESS : RC_EXISTS;
+}
+
+void OptKernelCreatorManager::Remove(const string& domain, const string& type) {
+    auto domain_ret = domain_type_creator_.find(domain);
+    if (domain_ret != domain_type_creator_.end()) {
+        auto& type2creator = domain_ret->second;
+        type2creator.erase(type);
+        if (type2creator.empty()) {
+            domain_type_creator_.erase(domain_ret);
+        }
+    }
 }
 
 OptKernelCreator OptKernelCreatorManager::Find(const string& domain, const string& type) {
@@ -200,7 +211,7 @@ OptKernelCreatorManager::OptKernelCreatorManager() {
 
     // ppl customize op domain is "ppl"
     REGISTER_OPT_KERNEL_CREATOR("ppl", "Bridge", BridgeOp);
-    REGISTER_OPT_KERNEL_CREATOR("ppl", "Shape", PPLShapeOp);
+    REGISTER_OPT_KERNEL_CREATOR("ppl", "Shape", PPLShapeOperationOp);
     REGISTER_OPT_KERNEL_CREATOR("ppl", "ChannelShuffle", ChannelShuffleOp);
 }
 

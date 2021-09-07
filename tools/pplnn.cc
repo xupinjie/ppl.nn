@@ -77,40 +77,52 @@ string ToString(T v) {
 
 #ifdef PPLNN_USE_CUDA
 
+Define_bool_opt("--use-cuda", g_flag_use_cuda, false, "use cuda engine");
+
 Define_string_opt("--output-format", g_flag_output_format, "", "declare the output format");
 Define_string_opt("--output-type", g_flag_output_type, "", "declare the output type");
-Define_string_opt("--dims", g_flag_compiler_dims, "0", "declare init input dims for algo selection (split with comma)."
-                  "for example: 1_3_224_224,1_3_128_640");
-Define_uint32_opt("--running-type", g_flag_kernel_default_types, 0,
-                  "declare the default type for running kernel, all the kernel will be excuted with this type");
-Define_bool_opt("--quick-select", g_flag_quick_select, 0, "quick select algorithms for conv and gemm kernel");
-Define_string_opt("--node-types", g_flag_node_datatype, "",
-                  "declare several node names and their types splited by comma for special kernels");
+Define_string_opt("--dims", g_flag_compiler_dims, "",
+                  "declare init input dims for algo selection (split with comma)."
+                  " for example: 1_3_224_224,1_3_128_640");
+Define_bool_opt("--quick-select", g_flag_quick_select, false, "quick select algorithms for conv and gemm kernel");
 Define_uint32_opt("--device-id", g_flag_device_id, 0, "declare device id for cuda");
-Define_string_opt("--quantization", g_flag_quantization, "", "declare json file saved quantization information");
 
 #include "ppl/nn/engines/cuda/engine_factory.h"
 #include "ppl/nn/engines/cuda/cuda_options.h"
 
-static bool FillRuntimeOptions(RuntimeOptions* options);
-
-static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
+static inline bool RegisterCudaEngine(vector<unique_ptr<Engine>>* engines) {
     CudaEngineOptions options;
     options.device_id = g_flag_device_id;
-    auto engine = CudaEngineFactory::Create(options);
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_OUTPUT_FORMAT, g_flag_output_format.c_str());
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_OUTPUT_TYPE, g_flag_output_type.c_str());
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_COMPILER_INPUT_SHAPE, g_flag_compiler_dims.c_str());
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_KERNEL_DEFAULT_TYPE, g_flag_kernel_default_types);
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_DEFAULT_ALGORITHMS, g_flag_quick_select);
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_NODE_DATA_TYPE, g_flag_node_datatype.c_str());
-    engine->Configure(ppl::nn::cuda::CUDA_CONF_SET_QUANTIZATION, g_flag_quantization.c_str());
-    engines->emplace_back(unique_ptr<Engine>(engine));
+
+    if (g_flag_mm_policy == "perf") {
+        options.mm_policy = CUDA_MM_BEST_FIT;
+    } else if (g_flag_mm_policy == "mem") {
+        options.mm_policy = CUDA_MM_COMPACT;
+    }
+
+    auto cuda_engine = CudaEngineFactory::Create(options);
+    if (!cuda_engine) {
+        return false;
+    }
+
+    cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_OUTPUT_FORMAT, g_flag_output_format.c_str());
+    cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_OUTPUT_TYPE, g_flag_output_type.c_str());
+    cuda_engine->Configure(ppl::nn::CUDA_CONF_USE_DEFAULT_ALGORITHMS, g_flag_quick_select);
+
+    if (!g_flag_compiler_dims.empty()) {
+        cuda_engine->Configure(ppl::nn::CUDA_CONF_SET_COMPILER_INPUT_SHAPE, g_flag_compiler_dims.c_str());
+    }
+
+    engines->emplace_back(unique_ptr<Engine>(cuda_engine));
     LOG(INFO) << "***** register CudaEngine *****";
     return true;
 }
 
-#elif defined(PPLNN_USE_X86)
+#endif
+
+#ifdef PPLNN_USE_X86
+
+Define_bool_opt("--use-x86", g_flag_use_x86, false, "use x86 engine");
 
 Define_bool_opt("--disable-avx512", g_flag_disable_avx512, false, "disable avx512 feature");
 Define_bool_opt("--core-binding", g_flag_core_binding, false, "core binding");
@@ -118,10 +130,17 @@ Define_bool_opt("--core-binding", g_flag_core_binding, false, "core binding");
 #include "ppl/nn/engines/x86/engine_factory.h"
 #include "ppl/nn/engines/x86/x86_options.h"
 #include "ppl/kernel/x86/common/threading_tools.h"
-static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
-    auto x86_engine = X86EngineFactory::Create();
+static inline bool RegisterX86Engine(vector<unique_ptr<Engine>>* engines) {
+    X86EngineOptions options;
+    if (g_flag_mm_policy == "perf") {
+        options.mm_policy = X86_MM_MRU;
+    } else if (g_flag_mm_policy == "mem") {
+        options.mm_policy = X86_MM_COMPACT;
+    }
+
+    auto x86_engine = X86EngineFactory::Create(options);
     if (g_flag_disable_avx512) {
-        x86_engine->Configure(ppl::nn::x86::X86_CONF_DISABLE_AVX512);
+        x86_engine->Configure(ppl::nn::X86_CONF_DISABLE_AVX512);
     }
     if (g_flag_core_binding) {
         ppl::kernel::x86::set_omp_core_binding(nullptr, 0, 1);
@@ -131,12 +150,38 @@ static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
     LOG(INFO) << "***** register X86Engine *****";
     return true;
 }
-#else
-static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
-    LOG(ERROR) << "no valid engines.";
-    return false;
-}
+
 #endif
+
+static inline bool RegisterEngines(vector<unique_ptr<Engine>>* engines) {
+#ifdef PPLNN_USE_X86
+    if (g_flag_use_x86) {
+        bool ok = RegisterX86Engine(engines);
+        if (!ok) {
+            LOG(ERROR) << "RegisterX86Engine failed.";
+            return false;
+        }
+    }
+#endif
+
+#ifdef PPLNN_USE_CUDA
+    if (g_flag_use_cuda) {
+        bool ok = RegisterCudaEngine(engines);
+        if (!ok) {
+            LOG(ERROR) << "RegisterCudaEngine failed.";
+            return false;
+        }
+    }
+#endif
+
+    if (engines->empty()) {
+        LOG(ERROR) << "no engine is registered. run `./pplnn --help` to see supported engines marked with '--use-*', "
+                      "or see documents listed in README.md for building instructions.";
+        return false;
+    }
+
+    return true;
+}
 
 /* -------------------------------------------------------------------------- */
 
@@ -177,18 +222,6 @@ static void SplitString(const char* str, unsigned int len, const char* delim, un
     f("", 0); // the last empty field
 }
 
-static bool FillRuntimeOptions(RuntimeOptions* options) {
-    if (g_flag_mm_policy == "perf") {
-        options->mm_policy = MM_BETTER_PERFORMANCE;
-    } else if (g_flag_mm_policy == "mem") {
-        options->mm_policy = MM_LESS_MEMORY;
-    } else {
-        LOG(ERROR) << "unsupported --mm-policy value: " << g_flag_mm_policy;
-        return false;
-    }
-    return true;
-}
-
 static void GenerateRandomDims(TensorShape* shape) {
     static const uint32_t max_dim = 640;
     static const uint32_t min_dim = 128;
@@ -215,12 +248,12 @@ static bool SetRandomInputs(const vector<vector<int64_t>>& input_shapes, Runtime
         }
 
         auto nr_element = shape.GetBytesIncludingPadding() / sizeof(float);
-        unique_ptr<float[]> buffer(new float[nr_element]);
+        vector<float> buffer(nr_element);
 
         std::default_random_engine eng;
         std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
         for (uint32_t i = 0; i < nr_element; ++i) {
-            buffer.get()[i] = dis(eng);
+            buffer[i] = dis(eng);
         }
 
         auto status = t->ReallocBuffer();
@@ -231,7 +264,7 @@ static bool SetRandomInputs(const vector<vector<int64_t>>& input_shapes, Runtime
 
         TensorShape src_desc = t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
-        status = t->ConvertFromHost(buffer.get(), src_desc);
+        status = t->ConvertFromHost(buffer.data(), src_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "set tensor[" << t->GetName() << "] content failed: " << GetRetCodeStr(status);
             return false;
@@ -457,11 +490,11 @@ static bool SaveInputsOneByOne(const Runtime* runtime) {
         auto& shape = t->GetShape();
 
         auto bytes = shape.GetBytesIncludingPadding();
-        unique_ptr<char[]> buffer(new char[bytes]);
+        vector<char> buffer(bytes);
 
         TensorShape src_desc = t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
-        auto status = t->ConvertToHost(buffer.get(), src_desc);
+        auto status = t->ConvertToHost(buffer.data(), src_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "convert data failed: " << GetRetCodeStr(status);
             return false;
@@ -483,7 +516,7 @@ static bool SaveInputsOneByOne(const Runtime* runtime) {
             return false;
         }
 
-        ofs.write(buffer.get(), bytes);
+        ofs.write(buffer.data(), bytes);
     }
 
     return true;
@@ -500,17 +533,17 @@ static bool SaveInputsAllInOne(const Runtime* runtime) {
     for (uint32_t c = 0; c < runtime->GetInputCount(); ++c) {
         auto t = runtime->GetInputTensor(c);
         auto bytes = t->GetShape().GetBytesIncludingPadding();
-        unique_ptr<char[]> buffer(new char[bytes]);
+        vector<char> buffer(bytes);
 
         TensorShape src_desc = t->GetShape();
         src_desc.SetDataFormat(DATAFORMAT_NDARRAY);
-        auto status = t->ConvertToHost((void*)buffer.get(), src_desc);
+        auto status = t->ConvertToHost((void*)buffer.data(), src_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "convert data failed: " << GetRetCodeStr(status);
             return false;
         }
 
-        ofs.write(buffer.get(), bytes);
+        ofs.write(buffer.data(), bytes);
     }
 
     return true;
@@ -523,9 +556,9 @@ static bool SaveOutputsOneByOne(const Runtime* runtime) {
         TensorShape dst_desc = t->GetShape();
         dst_desc.SetDataFormat(DATAFORMAT_NDARRAY);
         auto bytes = dst_desc.GetBytesIncludingPadding();
-        unique_ptr<char[]> buffer(new char[bytes]);
+        vector<char> buffer(bytes);
 
-        auto status = t->ConvertToHost(buffer.get(), dst_desc);
+        auto status = t->ConvertToHost(buffer.data(), dst_desc);
         if (status != RC_SUCCESS) {
             LOG(ERROR) << "convert data of tensor[" << t->GetName() << "] failed: " << GetRetCodeStr(status);
             return false;
@@ -538,7 +571,7 @@ static bool SaveOutputsOneByOne(const Runtime* runtime) {
             return false;
         }
 
-        ofs.write(buffer.get(), bytes);
+        ofs.write(buffer.data(), bytes);
     }
 
     return true;
@@ -720,19 +753,14 @@ int main(int argc, char* argv[]) {
         for (uint32_t i = 0; i < engines.size(); ++i) {
             engine_ptrs[i] = engines[i].get();
         }
-        auto builder = unique_ptr<OnnxRuntimeBuilder>(
+        auto builder = unique_ptr<RuntimeBuilder>(
             OnnxRuntimeBuilderFactory::Create(g_flag_onnx_model.c_str(), engine_ptrs.data(), engine_ptrs.size()));
         if (!builder) {
-            LOG(ERROR) << "create OnnxRuntimeBuilder failed.";
+            LOG(ERROR) << "create RuntimeBuilder failed.";
             return -1;
         }
 
-        RuntimeOptions runtime_options;
-        if (!FillRuntimeOptions(&runtime_options)) {
-            return -1;
-        }
-
-        runtime.reset(builder->CreateRuntime(runtime_options));
+        runtime.reset(builder->CreateRuntime());
     }
 
     if (!runtime) {

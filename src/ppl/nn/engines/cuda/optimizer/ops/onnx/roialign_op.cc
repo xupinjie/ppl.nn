@@ -34,7 +34,7 @@ RetCode ROIAlignOp::Init(const OptKernelOptions& options) {
         return status;
     }
 
-    infer_type_func_ = [this](InputOutputInfo* info, datatype_t type) -> RetCode {
+    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
         for (uint32_t i = 0; i < info->GetInputCount(); ++i) {
             auto in_shape = &info->GetInput<TensorImpl>(i)->GetShape();
             if (in_shape->GetDataType() == DATATYPE_UNKNOWN) {
@@ -48,7 +48,7 @@ RetCode ROIAlignOp::Init(const OptKernelOptions& options) {
             auto out_shape = &info->GetOutput<TensorImpl>(i)->GetShape();
             out_shape->SetDataType(DATATYPE_FLOAT32);
         }
-        return ppl::common::RC_SUCCESS;
+        return RC_SUCCESS;
     };
 
     infer_dims_func_ = [this](InputOutputInfo* info) -> RetCode {

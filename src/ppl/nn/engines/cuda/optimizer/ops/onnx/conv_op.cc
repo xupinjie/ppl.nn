@@ -18,6 +18,7 @@
 #include "ppl/nn/engines/cuda/optimizer/ops/onnx/conv_op.h"
 
 #include "ppl/nn/engines/cuda/kernels/onnx/conv_hmma_kernel.h"
+#include "ppl/nn/engines/cuda/kernels/onnx/conv_imma_kernel.h"
 #include "ppl/nn/engines/cuda/kernels/onnx/conv_depthwise_kernel.h"
 #include "ppl/nn/oputils/onnx/reshape_convolution.h"
 #include "ppl/nn/common/logger.h"
@@ -50,10 +51,30 @@ RetCode ConvOp::Init(const OptKernelOptions& options) {
 
     param_.param.bias_term = GetNode()->GetInputCount() > 2 ? 1 : 0;
 
-    infer_type_func_ = [this](InputOutputInfo* info, datatype_t type) -> RetCode {
-        if (type == ppl::common::DATATYPE_UNKNOWN) {
-            type = ppl::common::DATATYPE_FLOAT16;
+    infer_type_func_ = [this](InputOutputInfo* info, std::vector<CudaTensorQuant>* quant, datatype_t type) -> RetCode {
+        if (type == DATATYPE_INT8) {
+            auto in_edge_id = info->GetInput<TensorImpl>(0)->GetEdge()->GetId();
+            auto& in_quant = quant->at(in_edge_id);
+            auto out_edge_id = info->GetOutput<TensorImpl>(0)->GetEdge()->GetId();
+            auto& out_quant = quant->at(out_edge_id);
+            if (in_quant.type != DATATYPE_INT8 || out_quant.type != DATATYPE_INT8) {
+                return RC_INVALID_VALUE;
+            }
+            // Copy quant info skipping input0
+            for (uint32_t i = 1; i < info->GetInputCount(); ++i) {
+                auto in_edge_id = info->GetInput<TensorImpl>(i)->GetEdge()->GetId();
+                auto& in_quant = quant->at(in_edge_id);
+                auto in_shape = &info->GetInput<TensorImpl>(i)->GetShape();
+                if (i == 2 && param_.param.bias_term) {
+                    in_shape->SetDataType(ppl::common::DATATYPE_FLOAT32);
+                    continue;
+                }
+                in_quant = out_quant;
+                in_shape->SetDataType(in_quant.type);
+            }
+            return ppl::common::RC_SUCCESS;
         }
+        type = ppl::common::DATATYPE_FLOAT16;
         return InferDefaultType(info, type);
     };
 
@@ -92,6 +113,8 @@ KernelImpl* ConvOp::CreateKernelImpl() const {
         return CreateKernelImplWithParam<ConvHmmaKernel>(&param_);
     } else if (param_.extra_param.algo_info.algo_type == "DepthwiseDirect") {
         return CreateKernelImplWithParam<ConvDepthwiseKernel>(&param_);
+    } else if (param_.extra_param.algo_info.algo_type == "TuringIMMAImpgemm") {
+        return CreateKernelImplWithParam<ConvImmaKernel>(&param_);
     }
     return nullptr;
 }

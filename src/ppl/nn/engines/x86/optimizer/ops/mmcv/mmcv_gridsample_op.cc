@@ -35,9 +35,7 @@ RetCode MMCVGridSampleOp::Init(const OptKernelOptions& options) {
         return oputils::ReshapeMMCVGridSample(info, param_.get());
     };
 
-    infer_type_func_ = [](InputOutputInfo* info) -> void {
-        info->GetOutput<TensorImpl>(0)->GetShape().SetDataType(DATATYPE_FLOAT32);
-    };
+    infer_type_func_ = GenericInferType;
 
     return RC_SUCCESS;
 }

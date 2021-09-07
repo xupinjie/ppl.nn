@@ -30,6 +30,7 @@ struct ConvolutionParam {
     std::vector<int32_t> pads;
 
     int32_t group;
+    int32_t channels; // written in op ctx, for converted filter
     int32_t num_output; // written in op ctx, for converted filter
     int32_t bias_term; // written in op ctx, for multi-input layer fusion
 

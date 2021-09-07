@@ -22,11 +22,12 @@ namespace ppl { namespace nn { namespace x86 {
 
 uint64_t Conv2dDynamicKernel::CalcTmpBufferSize(const KernelExecContext& ctx) const {
     auto x = ctx.GetInput<TensorImpl>(0);
+    auto w = ctx.GetInput<TensorImpl>(1);
     auto y = ctx.GetOutput<TensorImpl>(0);
 
     const int32_t batch = x->GetShape().GetDim(0);
-    const int32_t num_output = y->GetShape().GetDim(1);
-    const int32_t channels = x->GetShape().GetDim(1);
+    const int32_t num_output = w->GetShape().GetDim(0);
+    const int32_t channels = w->GetShape().GetDim(1) * param_->group;
     const int32_t dst_h = y->GetShape().GetDim(2);
     const int32_t dst_w = y->GetShape().GetDim(3);
 
@@ -68,9 +69,11 @@ ppl::common::RetCode Conv2dDynamicKernel::DoExecute(KernelExecContext* ctx) {
     });
     auto tmp_buffer = tmp_buffer_desc.addr;
 
-    TensorImpl* X = ctx->GetInput<TensorImpl>(0);
-    TensorImpl* W = ctx->GetInput<TensorImpl>(1);
-    TensorImpl* B = nullptr;
+    PPLNN_X86_REQUIRED_INPUT(X, 0);
+    PPLNN_X86_REQUIRED_INPUT(W, 1);
+    PPLNN_X86_OPTIONAL_INPUT(B, 2);
+    PPLNN_X86_REQUIRED_OUTPUT(Y, 0);
+
     const float* b_data = nullptr;
 
     if (X->GetShape().GetDataType() != ppl::common::DATATYPE_FLOAT32 ||
@@ -92,19 +95,17 @@ ppl::common::RetCode Conv2dDynamicKernel::DoExecute(KernelExecContext* ctx) {
     }
 
     const int32_t num_output = W->GetShape().GetDim(0);
-    const bool bias_term = ctx->GetInputCount() >= 3;
-    if (bias_term) {
-        B = ctx->GetInput<TensorImpl>(2);
+    const int32_t channels = W->GetShape().GetDim(1) * param_->group;
+    if (B) {
         b_data = B->GetBufferPtr<float>();
     }
-    TensorImpl* Y = ctx->GetOutput<TensorImpl>(0);
 
     PPLNN_X86_DEBUG_TRACE("Op: %s\n", GetName().c_str());
     PPLNN_X86_DEBUG_TRACE("Input [X]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(X);
     PPLNN_X86_DEBUG_TRACE("Input [W]:\n");
     PPL_X86_TENSOR_PRINT_DEBUG_MSG(W);
-    if (bias_term) {
+    if (B) {
         PPLNN_X86_DEBUG_TRACE("Input [B]:\n");
         PPL_X86_TENSOR_PRINT_DEBUG_MSG(B);
     }
@@ -116,12 +117,10 @@ ppl::common::RetCode Conv2dDynamicKernel::DoExecute(KernelExecContext* ctx) {
     PPLNN_X86_DEBUG_TRACE("pads: %d %d %d %d\n", param_->pads[0], param_->pads[1], param_->pads[2], param_->pads[3]);
     PPLNN_X86_DEBUG_TRACE("group: %d\n", param_->group);
     PPLNN_X86_DEBUG_TRACE("num_output: %d\n", num_output);
-    PPLNN_X86_DEBUG_TRACE("bias_term: %d\n", bias_term);
     PPLNN_X86_DEBUG_TRACE("buffer: %p\n", tmp_buffer);
     PPLNN_X86_DEBUG_TRACE("isa: %u\n", GetISA());
 
     const int32_t batch = X->GetShape().GetDim(0);
-    const int32_t channels = X->GetShape().GetDim(1);
     const int32_t src_h = X->GetShape().GetDim(2);
     const int32_t src_w = X->GetShape().GetDim(3);
     const int32_t dst_h = Y->GetShape().GetDim(2);
